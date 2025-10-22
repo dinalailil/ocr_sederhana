@@ -14,39 +14,62 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-class _ScanScreenState extends State<ScanScreen> {
-  CameraController? _controller; // gunakan nullable agar aman
+class _ScanScreenState extends State<ScanScreen>
+    with SingleTickerProviderStateMixin {
+  CameraController? _controller;
   late Future<void> _initializeControllerFuture;
+  late AnimationController _blinkController;
+  late Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
     _initCamera();
+
+    //Animasi berkedip untuk teks "Memuat Kamera"
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+
+    _opacityAnimation =
+        Tween<double>(begin: 1.0, end: 0.3).animate(_blinkController);
   }
 
   /// Inisialisasi kamera
   void _initCamera() async {
-    try {
-      cameras = await availableCameras();
-      _controller = CameraController(
-        cameras.first,
-        ResolutionPreset.medium,
+  try {
+    cameras = await availableCameras();
+    _controller = CameraController(
+      cameras.first,
+      ResolutionPreset.medium,
+    );
+
+    _initializeControllerFuture = _controller!.initialize();
+    await _initializeControllerFuture;
+
+    if (mounted) {
+      setState(() {});
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Kamera gagal dimuat! Periksa izin kamera atau coba lagi.',
+          ),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 3),
+        ),
       );
-
-      _initializeControllerFuture = _controller!.initialize();
-      await _initializeControllerFuture;
-
-      if (mounted) {
-        setState(() {});
-      }
-    } catch (e) {
-      debugPrint('Error initializing camera: $e');
     }
   }
+}
 
   @override
   void dispose() {
     _controller?.dispose();
+    _blinkController.dispose();
     super.dispose();
   }
 
@@ -66,6 +89,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
     try {
       await _initializeControllerFuture;
+      
 
       if (!mounted) return;
 
@@ -88,18 +112,40 @@ class _ScanScreenState extends State<ScanScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
+      //Pesan error baru
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Pemindaian Gagal! Periksa Izin Kamera atau coba lagi.'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Jika controller belum siap, tampilkan loading
+    //Tampilan loading custom + animasi berkedip
     if (_controller == null || !_controller!.value.isInitialized) {
-      return const Scaffold(
+      return Scaffold(
+        backgroundColor: Colors.grey[900],
         body: Center(
-          child: CircularProgressIndicator(),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Colors.yellow),
+              const SizedBox(height: 20),
+              FadeTransition(
+                opacity: _opacityAnimation,
+                child: const Text(
+                  'Memuat Kamera... Harap tunggu.',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
